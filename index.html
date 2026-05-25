@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Negotiation Coach</title>
+<link rel="icon" type="image/png" href="/static/images/favicon.png">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: oklch(0.11 0.008 58); --surface: oklch(0.16 0.008 58); --surface2: oklch(0.20 0.008 58);
+    --border: oklch(0.28 0.008 55); --text: oklch(0.95 0.006 75); --text-muted: oklch(0.60 0.010 75);
+    --accent: oklch(0.76 0.165 72); --accent-hover: oklch(0.82 0.145 72);
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  /* ── SETUP ── */
+  #setup { display: flex; flex-direction: column; align-items: center; padding: 48px 24px; min-height: 100vh; }
+  .logo { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .logo span { color: var(--accent); }
+  .tagline { color: var(--text-muted); font-size: 15px; margin-bottom: 40px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 680px; margin-bottom: 24px; }
+  .card-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 16px; }
+  textarea#jobDesc { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 14px; padding: 14px; resize: vertical; min-height: 120px; outline: none; transition: border-color 0.2s; font-family: inherit; line-height: 1.6; }
+  textarea#jobDesc:focus { border-color: var(--accent); }
+  textarea#jobDesc::placeholder { color: var(--text-muted); }
+  .difficulty-grid { display: flex; gap: 10px; flex-wrap: wrap; }
+  .diff-card { background: var(--bg); border: 2px solid var(--border); border-radius: 10px; padding: 10px 16px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px; flex: 1; min-width: 110px; }
+  .diff-card:hover { border-color: var(--text-muted); transform: translateY(-1px); }
+  .diff-card.selected { transform: translateY(-2px); }
+  .diff-emoji { font-size: 18px; flex-shrink: 0; }
+  .diff-label { font-size: 13px; font-weight: 600; }
+  .voice-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .voice-card { background: var(--bg); border: 2px solid var(--border); border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 14px; }
+  .voice-card:hover { border-color: var(--text-muted); transform: translateY(-1px); }
+  .voice-card.selected { transform: translateY(-2px); }
+  .voice-info .name { font-size: 15px; font-weight: 700; }
+  .voice-info .role { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .voice-info .style { font-size: 11px; color: var(--text-muted); margin-top: 4px; font-style: italic; }
+  #startBtn { background: var(--accent); color: white; border: none; border-radius: 12px; padding: 16px 48px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  #startBtn:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 8px 24px oklch(0.76 0.165 72 / 0.38); }
+  #startBtn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* ── AVATAR ── */
+  .avatar { position: relative; border-radius: 50%; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; z-index: 2; }
+  .avatar span { position: relative; z-index: 1; pointer-events: none; }
+  .av-xl { width: 96px; height: 96px; font-size: 36px; }
+  .av-lg { width: 48px; height: 48px; font-size: 20px; }
+  .av-md { width: 44px; height: 44px; font-size: 18px; }
+  .av-sm { width: 34px; height: 34px; font-size: 13px; }
+
+  /* ── LOADING ── */
+  #loading { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 40px; }
+  .loading-av-wrap { position: relative; margin-bottom: 24px; }
+  .pulse-ring { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid currentColor; opacity: 0; animation: pulse-ring 2s ease-out infinite; }
+  .pulse-ring:nth-child(2) { animation-delay: 0.7s; }
+  @keyframes pulse-ring { 0% { transform: scale(0.9); opacity: 0.5; } 100% { transform: scale(1.35); opacity: 0; } }
+  .loading-name { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  .loading-role { font-size: 14px; color: var(--text-muted); margin-bottom: 36px; }
+  .load-steps { display: flex; flex-direction: column; width: 100%; max-width: 340px; margin-bottom: 28px; }
+  .load-step { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 10px; font-size: 14px; color: var(--text-muted); transition: all 0.35s; }
+  .load-step.active { background: var(--surface); color: var(--text); }
+  .load-step.done { color: #22c55e; }
+  .step-icon { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+  .step-spin { width: 15px; height: 15px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin-left: auto; flex-shrink: 0; }
+  .step-check { margin-left: auto; color: #22c55e; font-size: 13px; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .load-bar-track { width: 100%; max-width: 340px; height: 3px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .load-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; width: 0%; transition: width 0.55s ease; }
+
+  /* ── CHAT ── */
+  #chat { display: none; flex-direction: column; height: 100vh; }
+  #chatHeader { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .hdr-info .name { font-size: 15px; font-weight: 700; }
+  .hdr-info .role { font-size: 12px; color: var(--text-muted); }
+  .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+  .diff-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .hdr-btn { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 8px; padding: 5px 11px; font-size: 12px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .hdr-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .hdr-btn.accept { border-color: #22c55e44; color: #22c55e; }
+  .hdr-btn.accept:hover { border-color: #22c55e; background: #22c55e18; }
+  .hdr-icon-btn { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 8px; padding: 5px 9px; font-size: 15px; cursor: pointer; transition: all 0.2s; line-height: 1; }
+  .hdr-icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .hdr-icon-btn.muted { color: #ef4444; border-color: #ef444444; }
+
+  #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+  .msg { display: flex; align-items: flex-start; gap: 10px; max-width: 75%; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg-body { display: flex; flex-direction: column; gap: 4px; }
+  .msg-bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px; font-size: 14px; line-height: 1.6; }
+  .msg.user .msg-bubble { background: var(--accent); border-color: var(--accent); border-bottom-right-radius: 4px; }
+  .msg:not(.user) .msg-bubble { border-bottom-left-radius: 4px; }
+  .msg-actions { display: flex; gap: 6px; }
+  .replay-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 2px 4px; transition: color 0.15s; }
+  .replay-btn:hover { color: var(--accent); }
+
+  /* ── OFFER SLIDES ── */
+  .msg.offer-msg { max-width: 420px; }
+  .offer-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; border-bottom-left-radius: 4px; overflow: hidden; width: 380px; max-width: calc(100vw - 80px); }
+  .offer-label { padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+  .slide-pane { display: none; }
+  .slide-pane.visible { display: block; }
+  .slide-inner { padding: 18px; min-height: 170px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: hidden; }
+  .slide-inner::before { content: ''; position: absolute; top: -30px; right: -30px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,0.04); pointer-events: none; }
+  .si-icon { font-size: 28px; margin-bottom: 10px; }
+  .si-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; opacity: 0.65; margin-bottom: 6px; }
+  .si-amount { font-size: 30px; font-weight: 800; line-height: 1; margin-bottom: 6px; }
+  .si-headline { font-size: 20px; font-weight: 800; line-height: 1.2; margin-bottom: 6px; }
+  .si-tagline { font-size: 13px; opacity: 0.75; line-height: 1.5; }
+  .si-context { font-size: 12px; opacity: 0.65; margin-bottom: 10px; }
+  .si-details { display: flex; flex-direction: column; gap: 4px; }
+  .si-detail { font-size: 12px; opacity: 0.8; display: flex; gap: 6px; }
+  .si-detail::before { content: '›'; opacity: 0.5; flex-shrink: 0; }
+  .si-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .si-chip { background: rgba(255,255,255,0.12); border-radius: 20px; padding: 4px 10px; font-size: 12px; }
+  .si-breakdown { display: flex; flex-direction: column; margin-top: 8px; }
+  .si-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 12px; }
+  .si-row:last-child { border-bottom: none; }
+  .si-row .val { font-weight: 700; }
+  .offer-foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); }
+  .sl-arrow { background: transparent; border: 1px solid var(--border); color: var(--text-muted); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+  .sl-arrow:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .sl-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+  .sl-dots { display: flex; gap: 5px; align-items: center; }
+  .sl-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); cursor: pointer; transition: all 0.2s; }
+  .sl-dot.active { background: var(--accent); transform: scale(1.3); }
+  .sl-counter { font-size: 11px; color: var(--text-muted); }
+  .accept-offer-btn { margin-left: auto; background: #22c55e18; border: 1px solid #22c55e66; color: #22c55e; border-radius: 8px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .accept-offer-btn:hover { background: #22c55e28; border-color: #22c55e; }
+
+  /* ── TYPING ── */
+  .typing-indicator { display: flex; gap: 4px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; border-bottom-left-radius: 4px; width: fit-content; }
+  .dot { width: 7px; height: 7px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.2s infinite; }
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,80%,100% { transform: scale(0.7); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+
+  /* ── INPUT BAR ── */
+  #inputBar { background: var(--surface); border-top: 1px solid var(--border); padding: 12px 14px; display: flex; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+  .icon-btn { width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; transition: all 0.2s; background: var(--surface2); color: var(--text-muted); }
+  .icon-btn:hover { background: var(--border); color: var(--text); }
+  #micBtn.recording { background: #ef4444; color: white; animation: pulse-red 1s infinite; }
+  @keyframes pulse-red { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } }
+  #userInput { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-size: 14px; padding: 10px 14px; resize: none; outline: none; font-family: inherit; line-height: 1.5; max-height: 120px; transition: border-color 0.2s; }
+  #userInput:focus { border-color: var(--accent); }
+  #sendBtn { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--accent); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; transition: all 0.2s; }
+  #sendBtn:hover { background: var(--accent-hover); }
+  #sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── SIDEBAR ── */
+  #sbBackdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 49; }
+  #sbBackdrop.open { display: block; }
+  #sidebar { position: fixed; top: 0; left: 0; height: 100vh; width: 300px; background: var(--surface); border-right: 1px solid var(--border); z-index: 50; display: flex; flex-direction: column; transform: translateX(-100%); transition: transform 0.3s ease; }
+  #sidebar.open { transform: translateX(0); }
+  .sb-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .sb-title { font-size: 15px; font-weight: 700; }
+  .sb-close { background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; line-height: 1; padding: 2px; }
+  .sb-close:hover { color: var(--text); }
+  .sb-list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .sb-empty { text-align: center; color: var(--text-muted); font-size: 14px; padding: 40px 20px; line-height: 1.7; }
+  .sb-item { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px; cursor: pointer; transition: all 0.2s; }
+  .sb-item:hover { border-color: var(--text-muted); }
+  .sb-item.expanded { border-color: var(--accent); }
+  .sb-item-head { display: flex; align-items: center; gap: 10px; }
+  .sb-av { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+  .sb-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+  .sb-av span { position: relative; z-index: 1; }
+  .sb-meta { flex: 1; min-width: 0; }
+  .sb-name { font-size: 13px; font-weight: 700; }
+  .sb-job { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .sb-row2 { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+  .sb-diff { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }
+  .sb-date { font-size: 10px; color: var(--text-muted); margin-left: auto; }
+  .sb-score { font-size: 18px; font-weight: 800; flex-shrink: 0; }
+  .sb-detail { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: none; }
+  .sb-item.expanded .sb-detail { display: block; }
+  .sb-headline { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px; }
+  .sb-verdict { font-size: 12px; color: var(--text-muted); line-height: 1.5; font-style: italic; }
+  .sb-final { font-size: 11px; margin-top: 6px; }
+  .sb-final span { color: var(--accent); font-weight: 600; }
+
+  /* ── MODAL ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto; }
+  .modal-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .modal-title { font-size: 20px; font-weight: 800; }
+  .close-btn { background: transparent; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer; }
+  .debrief-lede { margin-bottom: 24px; }
+  .debrief-headline { font-size: 19px; font-weight: 700; line-height: 1.4; margin-bottom: 16px; }
+  .debrief-score-row { display: flex; align-items: center; gap: 14px; }
+  .debrief-bar-track { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .debrief-bar { height: 100%; border-radius: 99px; transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1); width: 0%; }
+  .debrief-score-val { font-size: 22px; font-weight: 800; flex-shrink: 0; }
+  .debrief-score-denom { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+  .assess-section { margin-bottom: 20px; }
+  .assess-section h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 10px; }
+  .assess-list { display: flex; flex-direction: column; gap: 8px; }
+  .assess-item { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; }
+  .assess-icon { flex-shrink: 0; }
+  .verdict-box { background: var(--bg); border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.7; color: var(--text-muted); }
+  .final-offer { background: var(--bg); border-radius: 12px; padding: 14px 16px; font-size: 14px; margin-bottom: 20px; }
+  .final-offer strong { color: var(--accent); }
+  .modal-loading { text-align: center; color: var(--text-muted); font-size: 14px; padding: 40px 0; }
+
+  /* ── SAMPLE ROLES ── */
+  .sample-roles { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .sample-role-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 13px; font-size: 12px; color: var(--text-muted); cursor: pointer; transition: all 0.2s; }
+  .sample-role-btn:hover { border-color: var(--accent); color: var(--text); }
+  .sample-role-btn.active { border-color: var(--accent); color: var(--accent); background: oklch(0.76 0.165 72 / 0.10); }
+
+  /* ── QUICK REPLIES ── */
+  #quickReplies { background: var(--surface); border-top: 1px solid var(--border); padding: 8px 14px; display: flex; gap: 8px; overflow-x: auto; flex-shrink: 0; scrollbar-width: none; }
+  #quickReplies::-webkit-scrollbar { display: none; }
+  .qr-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 6px 13px; font-size: 12px; color: var(--text-muted); cursor: pointer; transition: all 0.2s; white-space: nowrap; flex-shrink: 0; }
+  .qr-chip:hover { border-color: var(--accent); color: var(--text); }
+
+  /* ── CONFETTI CANVAS ── */
+  #confettiCanvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 200; display: none; }
+</style>
+</head>
+<body>
+
+<canvas id="confettiCanvas"></canvas>
+
+<!-- SIDEBAR -->
+<div id="sbBackdrop" onclick="closeSidebar()"></div>
+<div id="sidebar">
+  <div class="sb-header">
+    <div class="sb-title">Past Negotiations</div>
+    <button class="sb-close" onclick="closeSidebar()">✕</button>
+  </div>
+  <div class="sb-list" id="sbList"></div>
+</div>
+
+<!-- SETUP -->
+<div id="setup">
+  <div class="logo">Negotiation <span>Coach</span></div>
+  <div class="tagline">Practice salary negotiations with AI — get real, tough counteroffers</div>
+  <div class="card">
+    <div class="card-title">Job Description</div>
+    <div class="sample-roles">
+      <button class="sample-role-btn" onclick="loadSample(0)">💻 Software Engineer</button>
+      <button class="sample-role-btn" onclick="loadSample(1)">🚀 GTM Engineer</button>
+      <button class="sample-role-btn" onclick="loadSample(2)">📊 Analytics Engineer</button>
+    </div>
+    <textarea id="jobDesc" placeholder="Paste the job description here..."></textarea>
+  </div>
+  <div class="card">
+    <div class="card-title">Difficulty Level</div>
+    <div class="difficulty-grid" id="diffGrid"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Choose Your Negotiator</div>
+    <div class="voice-grid" id="voiceGrid"></div>
+  </div>
+  <button id="startBtn" disabled>Start Negotiation →</button>
+</div>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="loading-av-wrap">
+    <div class="pulse-ring" id="pr1"></div>
+    <div class="pulse-ring" id="pr2"></div>
+    <div class="avatar av-xl" id="loadAv"></div>
+  </div>
+  <div class="loading-name" id="loadName"></div>
+  <div class="loading-role" id="loadRole"></div>
+  <div class="load-steps">
+    <div class="load-step" id="ls0"><span class="step-icon">📄</span><span>Reading your job description</span></div>
+    <div class="load-step" id="ls1"><span class="step-icon">🔍</span><span>Researching role and market rates</span></div>
+    <div class="load-step" id="ls2"><span class="step-icon">🧠</span><span>Forming a negotiation strategy</span></div>
+    <div class="load-step" id="ls3"><span class="step-icon">🎯</span><span>Setting initial offer parameters</span></div>
+  </div>
+  <div class="load-bar-track"><div class="load-bar-fill" id="loadBar"></div></div>
+</div>
+
+<!-- CHAT -->
+<div id="chat">
+  <div id="chatHeader">
+    <div class="avatar av-md" id="hdrAv"></div>
+    <div class="hdr-info">
+      <div class="name" id="hdrName"></div>
+      <div class="role" id="hdrRole"></div>
+    </div>
+    <div class="hdr-right">
+      <span class="diff-badge" id="diffBadge"></span>
+      <button class="hdr-icon-btn" id="muteBtn" onclick="toggleMute()" title="Mute AI voice">🔊</button>
+      <button class="hdr-btn accept" onclick="acceptOffer()">✅ Accept Offer</button>
+      <button class="hdr-btn" id="assessBtn">📊 Assess Me</button>
+      <button class="hdr-icon-btn" onclick="openSidebar()" title="History">☰</button>
+      <button class="hdr-icon-btn" onclick="newSession()" title="New negotiation" style="font-size:18px">↺</button>
+    </div>
+  </div>
+  <div id="messages"></div>
+  <div id="quickReplies">
+    <button class="qr-chip" data-msg="I've researched the market and comparable roles at this level are paying significantly more. Can we revisit the base salary?" onclick="sendMessage(this.dataset.msg)">📊 Market rates are higher</button>
+    <button class="qr-chip" data-msg="I'm currently weighing a competing offer. Is there flexibility to improve the package and help me make this decision?" onclick="sendMessage(this.dataset.msg)">⚖️ I have a competing offer</button>
+    <button class="qr-chip" data-msg="Given my experience and what I'd bring to this role, I was expecting the compensation to be closer to my target range. Can we close that gap?" onclick="sendMessage(this.dataset.msg)">💼 My experience warrants more</button>
+  </div>
+  <div id="inputBar">
+    <button class="icon-btn" id="micBtn" title="Hold to speak">🎤</button>
+    <textarea id="userInput" rows="1" placeholder="Type your response..."></textarea>
+    <button id="sendBtn">➤</button>
+  </div>
+</div>
+
+<!-- ASSESSMENT MODAL -->
+<div class="modal-overlay" id="assessModal">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <div class="modal-title" id="assessModalTitle">Negotiation Assessment</div>
+      <button class="close-btn" onclick="$('assessModal').classList.remove('open')">✕</button>
+    </div>
+    <div id="assessContent"><div class="modal-loading">Analyzing...</div></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let config = {}, selectedDiff = null, selectedVoice = null;
+let conversationHistory = [], currentVoice = null;
+let audioMap = new Map(), isBusy = false;
+let currentAudio = null, currentAudioBtn = null;
+let wavRecorder = null, isRecording = false;
+let slideIdx = 0, slideTotal = 0;
+let isMuted = false;
+let currentSessionId = null;
+let expandedSessionId = null;
+
+// ── WAV RECORDER ──
+class WavRecorder {
+  constructor() { this.samples = []; this.sampleRate = 16000; }
+  async start() {
+    this.samples = [];
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: this.sampleRate });
+    const src = this.ctx.createMediaStreamSource(this.stream);
+    this.proc = this.ctx.createScriptProcessor(4096, 1, 1);
+    this.proc.onaudioprocess = e => this.samples.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    src.connect(this.proc);
+    this.proc.connect(this.ctx.destination);
+  }
+  async stop() {
+    this.proc.disconnect();
+    this.stream.getTracks().forEach(t => t.stop());
+    await this.ctx.close();
+    const len = this.samples.reduce((a, s) => a + s.length, 0);
+    const pcm = new Float32Array(len);
+    let off = 0;
+    for (const s of this.samples) { pcm.set(s, off); off += s.length; }
+    return this._wav(pcm);
+  }
+  _wav(f32) {
+    const i16 = new Int16Array(f32.length);
+    for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-0x8000, Math.min(0x7FFF, Math.round(f32[i] * 0x7FFF)));
+    const buf = new ArrayBuffer(44 + i16.length * 2);
+    const v = new DataView(buf);
+    const sr = this.sampleRate;
+    const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    ws(0,'RIFF'); v.setUint32(4,36+i16.length*2,true); ws(8,'WAVE'); ws(12,'fmt ');
+    v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+    v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+    ws(36,'data'); v.setUint32(40,i16.length*2,true);
+    new Int16Array(buf,44).set(i16);
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i+8192));
+    return btoa(bin);
+  }
+}
+
+// ── AVATAR ──
+function av(voice, cls) {
+  return `<div class="avatar ${cls}" style="background:${voice.color}22;color:${voice.color}">
+    <img src="${voice.image}" alt="${voice.name}" onerror="this.remove()">
+    <span>${voice.name[0]}</span></div>`;
+}
+
+// ── SAMPLE ROLES ──
+const SAMPLE_ROLES = [
+  `Software Engineer\nParis · Engineering · Full-time\n\nAbout the Role\nJoin our team to build scalable infrastructure that handles thousands of voice AI requests daily. You'll design and implement systems that handle real-time audio processing at global scale.\n\nResponsibilities\n• Design and build scalable backend services for real-time audio processing\n• Optimize API performance and reduce latency for global users\n• Implement robust monitoring, logging, and alerting systems\n• Work with the research team to deploy and serve models efficiently\n• Ensure high availability and reliability of production systems\n\nQualifications\n• BS in Computer Science or equivalent practical experience\n• 5+ years of backend engineering experience\n• Strong programming skills in Python or Rust\n• Experience with distributed systems\n• Proficiency with cloud platforms (AWS, GCP, or Azure)\n\nNice to Have\n• Experience with real-time audio/video processing systems\n• Knowledge of WebRTC and streaming protocols\n• Experience with Kubernetes and container orchestration\n• Understanding of ML model serving infrastructure`,
+
+  `GTM Engineer\nParis · Growth · Full-time\n\nAbout the Role\nGradium is looking for a GTM Engineer to architect a technical, high-velocity growth engine. You will sit at the intersection of engineering and sales to drive user growth and conversion. This is a high-impact role where you will build automated systems using LLMs, data APIs, and voice AI to revolutionize how we scale.\n\nResponsibilities\n• Architect the Signal Engine: Build systems to track high-intent triggers like tech stack changes or social signals and automate lead routing\n• Drive the Aha Moment: Engineer automated bridges between usage milestones and outreach to optimize conversion\n• Scale Personalization: Use LLMs and Voice AI to generate hyper-personalized outbound content and custom video demos at scale\n• Community Content: Architect the stack to programmatically surface and feature content created by our community of users\n• Deploy AI Agents: Develop internal agents for prospect research, lead enrichment, and automated meeting prep\n• Execute Experiments: Design and run A/B tests on onboarding flows and self-serve funnels\n• Own the Analytics Stack, including RevOps to monitor funnel health and attribution\n\nQualifications\n• Experience in GTM Engineering, RevOps, or Growth Engineering in a fast-scaling SaaS or AI startup\n• Strong command of sales systems, data architecture, and GTM analytics\n• Track record building automation, tooling, and processes that drive revenue efficiency\n• Deep fluency in Python and SQL and experience with analytics and forecasting models\n• Builder mindset: you see GTM systems as products and engineer for scale, not patchwork\n\nNice to Have\n• Experience with Voice AI frameworks (e.g. Livekit, Pipecat)`,
+
+  `Analytics Engineer I\nNew York City · Data Team · Full-time\n\nAbout the Role\nOscar Health is hiring an Analytics Engineer I to join the Data Team. You will design, build, and maintain dimensional models and data transformations that convert raw operational data into reliable, well-structured analytical assets. You will work within Oscar's unified data foundation in dbt, partnering with domain experts to capture business logic and translate it into models that serve analytics use cases across the organization.\n\nResponsibilities\n• Partner with Subject Matter Experts and Business stakeholders to explore data, define requirements, and design data transformation solutions\n• Advance the Analytics Engineering roadmap by executing on small-to-medium projects with minimal oversight\n• Contribute to development and documentation of best practices consistent with industry standards\n• Leverage data quality checks and monitoring pipelines to perform Root Cause Analyses of data defects\n• Contribute to administration of the analytics platform including access requests and support channels\n\nQualifications\n• 1+ years of experience in Analytics Engineering, Data Science, or a related field\n• 1+ years of experience with SQL\n• 1+ years of experience in a semantic modeling language (e.g. LookML)\n• 1+ years of experience with a modern data transformation tool like dbt\n• 1+ years of experience with cloud database tools (GCP, AWS, or Azure)\n\nNice to Have\n• Experience with healthcare or insurance industry data\n• Experience with Google Cloud Platform and dbt\n• Experience building dimensional models (star schemas, slowly changing dimensions)\n\nCompensation: $106,812 - $140,190 per year plus equity, bonuses, and full benefits.`
+];
+
+function loadSample(i) {
+  $('jobDesc').value = SAMPLE_ROLES[i];
+  document.querySelectorAll('.sample-role-btn').forEach((b, j) => b.classList.toggle('active', j === i));
+  $('jobDesc').dispatchEvent(new Event('input'));
+}
+
+// ── INIT ──
+async function init() {
+  const res = await fetch('/api/config');
+  config = await res.json();
+  $('diffGrid').innerHTML = config.difficulties.map(d => `
+    <div class="diff-card" data-id="${d.id}" onclick="pickDiff('${d.id}')">
+      <div class="diff-emoji">${d.emoji}</div>
+      <div class="diff-label" style="color:${d.color}">${d.label}</div>
+    </div>`).join('');
+  $('voiceGrid').innerHTML = config.voices.map(v => `
+    <div class="voice-card" data-id="${v.id}" onclick="pickVoice('${v.id}')">
+      ${av(v, 'av-lg')}
+      <div class="voice-info">
+        <div class="name">${v.name}</div>
+        <div class="role">${v.role} · ${v.accent}</div>
+        <div class="style">${v.style}</div>
+      </div></div>`).join('');
+}
+
+function pickDiff(id) {
+  selectedDiff = id;
+  document.querySelectorAll('.diff-card').forEach(el => {
+    const d = config.difficulties.find(x => x.id === el.dataset.id);
+    const on = el.dataset.id === id;
+    el.classList.toggle('selected', on);
+    el.style.borderColor = on ? d.color : 'var(--border)';
+  });
+  checkReady();
+}
+function pickVoice(id) {
+  selectedVoice = id;
+  document.querySelectorAll('.voice-card').forEach(el => {
+    const v = config.voices.find(x => x.id === el.dataset.id);
+    const on = el.dataset.id === id;
+    el.classList.toggle('selected', on);
+    el.style.borderColor = on ? v.color : 'var(--border)';
+  });
+  checkReady();
+}
+function checkReady() {
+  $('startBtn').disabled = !(selectedDiff && selectedVoice && $('jobDesc').value.trim().length > 20);
+}
+$('jobDesc').addEventListener('input', checkReady);
+
+// ── LOADING ──
+function showLoading(voice, diff) {
+  $('setup').style.display = 'none';
+  const la = $('loadAv');
+  la.style.background = voice.color + '22'; la.style.color = voice.color;
+  la.innerHTML = `<img src="${voice.image}" alt="${voice.name}" onerror="this.remove()"><span>${voice.name[0]}</span>`;
+  ['pr1','pr2'].forEach(id => $(id).style.color = voice.color);
+  $('loadName').textContent = voice.name;
+  $('loadRole').textContent = `${voice.role} · ${diff.label} mode`;
+  for (let i = 0; i < 4; i++) {
+    const el = $(`ls${i}`);
+    el.classList.remove('active','done');
+    el.querySelector('.step-spin, .step-check')?.remove();
+  }
+  $('loadBar').style.width = '0%';
+  $('loading').style.display = 'flex';
+  [0,650,1300,1950].forEach((t, i) => setTimeout(() => {
+    if (i > 0) {
+      const prev = $(`ls${i-1}`);
+      prev.classList.remove('active'); prev.classList.add('done');
+      prev.querySelector('.step-spin')?.remove();
+      const chk = document.createElement('span'); chk.className = 'step-check'; chk.textContent = '✓';
+      prev.appendChild(chk);
+    }
+    const cur = $(`ls${i}`); cur.classList.add('active');
+    const sp = document.createElement('div'); sp.className = 'step-spin'; cur.appendChild(sp);
+    $('loadBar').style.width = `${(i+1)*25}%`;
+  }, t));
+}
+function hideLoading() {
+  const last = $('ls3');
+  last.classList.remove('active'); last.classList.add('done');
+  last.querySelector('.step-spin')?.remove();
+  const chk = document.createElement('span'); chk.className = 'step-check'; chk.textContent = '✓';
+  last.appendChild(chk);
+  $('loadBar').style.width = '100%';
+  setTimeout(() => { $('loading').style.display = 'none'; $('chat').style.display = 'flex'; }, 350);
+}
+
+// ── START ──
+$('startBtn').addEventListener('click', async () => {
+  const jobDesc = $('jobDesc').value.trim();
+  if (!jobDesc || !selectedDiff || !selectedVoice) return;
+
+  currentVoice = config.voices.find(v => v.id === selectedVoice);
+  const diff = config.difficulties.find(d => d.id === selectedDiff);
+  currentSessionId = Date.now().toString();
+
+  $('hdrAv').style.cssText = `background:${currentVoice.color}22;color:${currentVoice.color}`;
+  $('hdrAv').innerHTML = `<img src="${currentVoice.image}" alt="${currentVoice.name}" onerror="this.remove()"><span>${currentVoice.name[0]}</span>`;
+  $('hdrName').textContent = currentVoice.name;
+  $('hdrRole').textContent = currentVoice.role;
+  $('diffBadge').textContent = `${diff.emoji} ${diff.label}`;
+  $('diffBadge').style.background = diff.color + '22';
+  $('diffBadge').style.color = diff.color;
+
+  showLoading(currentVoice, diff);
+  conversationHistory = [{ role: 'user', content: 'Please make your opening offer.' }];
+  isBusy = true;
+
+  let data;
+  try {
+    const res = await fetch('/api/start', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ job_description: jobDesc, difficulty: selectedDiff, voice_id: selectedVoice }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(err.detail || `Server error ${res.status}`);
+    }
+    data = await res.json();
+  } catch (e) {
+    isBusy = false;
+    $('loading').style.display = 'none';
+    $('setup').style.display = 'flex';
+    alert(`Failed to start negotiation:\n${e.message}\n\nMake sure ANTHROPIC_API_KEY is exported in the same terminal where you run python3 app.py`);
+    return;
+  }
+
+  hideLoading();
+  isBusy = false;
+
+  // Seed session in localStorage (status updated on accept/assess)
+  initSession(currentSessionId, {
+    voice: { name: currentVoice.name, role: currentVoice.role, color: currentVoice.color, image: currentVoice.image },
+    diff: { label: diff.label, emoji: diff.emoji, color: diff.color },
+    jobSnippet: jobDesc.split('\n')[0].trim().substring(0, 55),
+  });
+
+  conversationHistory.push({ role: 'assistant', content: data.text });
+  addMessage('ai', data.text, data.audio_b64);
+  if (data.slides) addOfferSlides(data.slides);
+  if (data.audio_b64) playAudio(data.audio_b64);
+});
+
+// ── MESSAGES ──
+function addMessage(type, text, audio_b64) {
+  const id = 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+  if (audio_b64) audioMap.set(id, audio_b64);
+  const div = document.createElement('div');
+  div.className = 'msg' + (type === 'user' ? ' user' : '');
+  const avatarEl = type === 'ai'
+    ? `<div class="avatar av-sm" style="background:${currentVoice.color}22;color:${currentVoice.color}"><img src="${currentVoice.image}" alt="${currentVoice.name}" onerror="this.remove()"><span>${currentVoice.name[0]}</span></div>`
+    : `<div class="avatar av-sm" style="background:var(--accent);color:white"><span style="font-size:10px">You</span></div>`;
+  const replayBtn = audio_b64 ? `<button class="replay-btn" title="Play / Stop" onclick="replayAudio('${id}', this)">🔊</button>` : '';
+  const bubbleContent = type === 'ai' ? renderMd(text) : escHtml(text);
+  div.innerHTML = `${avatarEl}<div class="msg-body"><div class="msg-bubble">${bubbleContent}</div>${replayBtn ? `<div class="msg-actions">${replayBtn}</div>` : ''}</div>`;
+  $('messages').appendChild(div);
+  $('messages').scrollTop = $('messages').scrollHeight;
+}
+
+// ── OFFER SLIDES ──
+function addOfferSlides(slides) {
+  if (!slides || !slides.slides) return;
+  slideIdx = 0;
+  slideTotal = slides.slides.length;
+  const div = document.createElement('div');
+  div.className = 'msg offer-msg';
+  div.innerHTML = `
+    <div class="avatar av-sm" style="background:${currentVoice.color}22;color:${currentVoice.color}">
+      <img src="${currentVoice.image}" alt="${currentVoice.name}" onerror="this.remove()">
+      <span>${currentVoice.name[0]}</span>
+    </div>
+    <div class="offer-card">
+      <div class="offer-label">📋 Initial Offer Package</div>
+      <div id="slideViewport">
+        ${slides.slides.map((s, i) => `<div class="slide-pane ${i===0?'visible':''}" id="sp${i}">${renderSlide(s)}</div>`).join('')}
+      </div>
+      <div class="offer-foot">
+        <button class="sl-arrow" id="slPrev" onclick="slidePrev()" disabled>‹</button>
+        <div class="sl-dots" id="slDots">
+          ${slides.slides.map((_,i) => `<div class="sl-dot ${i===0?'active':''}" onclick="slideGoTo(${i})"></div>`).join('')}
+        </div>
+        <button class="sl-arrow" id="slNext" onclick="slideNext()">›</button>
+        <span class="sl-counter" id="slCounter">1 / ${slideTotal}</span>
+        <button class="accept-offer-btn" onclick="acceptOffer()">Accept ✅</button>
+      </div>
+    </div>`;
+  $('messages').appendChild(div);
+  $('messages').scrollTop = $('messages').scrollHeight;
+}
+
+function renderSlide(s) {
+  const bg = s.accent + '18', br = s.accent + '33';
+  if (s.type === 'intro') return `<div class="slide-inner" style="background:${bg};border-bottom:1px solid ${br}">
+    <div class="si-icon">${s.icon}</div><div class="si-label" style="color:${s.accent}">${s.title}</div>
+    <div class="si-headline">${escHtml(s.role)}</div><div class="si-tagline">${escHtml(s.tagline)}</div></div>`;
+  if (s.type === 'benefits') return `<div class="slide-inner" style="background:${bg};border-bottom:1px solid ${br}">
+    <div class="si-icon">${s.icon}</div><div class="si-label" style="color:${s.accent}">${s.title}</div>
+    <div class="si-chips">${(s.items||[]).map(x=>`<div class="si-chip">${escHtml(x)}</div>`).join('')}</div></div>`;
+  if (s.type === 'total') return `<div class="slide-inner" style="background:${bg};border-bottom:1px solid ${br}">
+    <div class="si-icon">${s.icon}</div><div class="si-label" style="color:${s.accent}">${s.title}</div>
+    <div class="si-amount">${escHtml(s.amount)}</div><div class="si-context">${escHtml(s.context)}</div>
+    <div class="si-breakdown">${(s.breakdown||[]).map(r=>`<div class="si-row"><span>${escHtml(r.label)}</span><span class="val">${escHtml(r.value)}</span></div>`).join('')}</div></div>`;
+  return `<div class="slide-inner" style="background:${bg};border-bottom:1px solid ${br}">
+    <div class="si-icon">${s.icon}</div><div class="si-label" style="color:${s.accent}">${s.title}</div>
+    <div class="si-amount">${escHtml(s.amount)}</div><div class="si-context">${escHtml(s.context)}</div>
+    <div class="si-details">${(s.details||[]).map(d=>`<div class="si-detail">${escHtml(d)}</div>`).join('')}</div></div>`;
+}
+
+function slideGoTo(i) {
+  if (i < 0 || i >= slideTotal) return;
+  document.querySelectorAll('.slide-pane').forEach((p,j) => p.classList.toggle('visible', j===i));
+  document.querySelectorAll('.sl-dot').forEach((d,j) => d.classList.toggle('active', j===i));
+  $('slCounter').textContent = `${i+1} / ${slideTotal}`;
+  $('slPrev').disabled = i === 0;
+  $('slNext').disabled = i === slideTotal - 1;
+  slideIdx = i;
+}
+function slideNext() { slideGoTo(slideIdx + 1); }
+function slidePrev() { slideGoTo(slideIdx - 1); }
+
+// ── TYPING ──
+let typingEl = null;
+function showTyping() {
+  typingEl = document.createElement('div');
+  typingEl.className = 'msg';
+  typingEl.innerHTML = `
+    <div class="avatar av-sm" style="background:${currentVoice.color}22;color:${currentVoice.color}">
+      <img src="${currentVoice.image}" alt="${currentVoice.name}" onerror="this.remove()"><span>${currentVoice.name[0]}</span>
+    </div>
+    <div class="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+  $('messages').appendChild(typingEl);
+  $('messages').scrollTop = $('messages').scrollHeight;
+}
+function hideTyping() { typingEl?.remove(); typingEl = null; }
+
+async function sendMessage(text) {
+  if (!text.trim() || isBusy) return;
+  isBusy = true;
+  $('sendBtn').disabled = true;
+  $('userInput').value = ''; $('userInput').style.height = 'auto';
+  addMessage('user', text, null);
+  conversationHistory.push({ role: 'user', content: text });
+  showTyping();
+  const res = await fetch('/api/chat', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ messages: conversationHistory, job_description: $('jobDesc').value.trim(), difficulty: selectedDiff, voice_id: selectedVoice }),
+  });
+  const data = await res.json();
+  hideTyping();
+  conversationHistory.push({ role: 'assistant', content: data.text });
+  addMessage('ai', data.text, data.audio_b64);
+  if (data.audio_b64) playAudio(data.audio_b64);
+  isBusy = false;
+  $('sendBtn').disabled = false;
+}
+
+$('sendBtn').addEventListener('click', () => sendMessage($('userInput').value));
+$('userInput').addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage($('userInput').value);} });
+$('userInput').addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,120)+'px'; });
+
+// ── AUDIO ──
+function _stopCurrent() {
+  if (!currentAudio) return;
+  currentAudio.pause();
+  currentAudio.currentTime = 0;
+  if (currentAudioBtn) { currentAudioBtn.textContent = '🔊'; currentAudioBtn = null; }
+  currentAudio = null;
+}
+function playAudio(b64) {
+  _stopCurrent();
+  if (isMuted) return;
+  currentAudio = new Audio('data:audio/wav;base64,' + b64);
+  currentAudio.addEventListener('ended', () => { currentAudio = null; currentAudioBtn = null; });
+  currentAudio.play().catch(() => { currentAudio = null; });
+}
+function replayAudio(id, btn) {
+  const b64 = audioMap.get(id);
+  if (!b64) return;
+  // Same button clicked while playing → stop
+  if (currentAudioBtn === btn && currentAudio && !currentAudio.paused) {
+    _stopCurrent();
+    return;
+  }
+  _stopCurrent();
+  if (isMuted) return;
+  currentAudio = new Audio('data:audio/wav;base64,' + b64);
+  currentAudioBtn = btn;
+  btn.textContent = '⏸';
+  currentAudio.addEventListener('ended', () => {
+    btn.textContent = '🔊';
+    currentAudio = null;
+    currentAudioBtn = null;
+  });
+  currentAudio.play().catch(() => {
+    btn.textContent = '🔊';
+    currentAudio = null;
+    currentAudioBtn = null;
+  });
+}
+
+// ── MUTE ──
+function toggleMute() {
+  isMuted = !isMuted;
+  $('muteBtn').textContent = isMuted ? '🔇' : '🔊';
+  $('muteBtn').classList.toggle('muted', isMuted);
+  $('muteBtn').title = isMuted ? 'Unmute AI voice' : 'Mute AI voice';
+}
+
+// ── MIC — auto-send after transcription ──
+$('micBtn').addEventListener('click', async () => { isRecording ? stopRecording() : startRecording(); });
+
+async function startRecording() {
+  try {
+    wavRecorder = new WavRecorder();
+    await wavRecorder.start();
+    isRecording = true;
+    $('micBtn').classList.add('recording');
+    $('micBtn').textContent = '⏹';
+    $('micBtn').title = 'Click to send';
+  } catch { alert('Microphone access denied.'); }
+}
+
+async function stopRecording() {
+  isRecording = false;
+  $('micBtn').classList.remove('recording');
+  $('micBtn').textContent = '⏳';
+  $('micBtn').title = 'Transcribing...';
+  try {
+    const b64 = await wavRecorder.stop();
+    const res = await fetch('/api/transcribe', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ audio_b64: b64, content_type: 'audio/wav' }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.text) sendMessage(data.text); // auto-send immediately
+    } else {
+      // Fallback: put text in box so user can edit and send manually
+      const err = await res.json().catch(()=>({}));
+      $('userInput').value = '';
+      $('userInput').placeholder = `Transcription failed: ${err.detail||'try again'}`;
+    }
+  } catch { $('userInput').placeholder = 'Transcription error — type your message'; }
+  finally {
+    $('micBtn').textContent = '🎤';
+    $('micBtn').title = 'Click to speak';
+  }
+}
+
+// ── CONFETTI ──
+function showConfetti() {
+  const canvas = $('confettiCanvas');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  const colors = ['#6366f1','#0ea5e9','#22c55e','#f59e0b','#ec4899','#f97316','#a855f7'];
+  const particles = Array.from({length: 140}, () => ({
+    x: Math.random() * canvas.width,
+    y: canvas.height + Math.random() * 20,
+    vx: (Math.random() - 0.5) * 7,
+    vy: -(Math.random() * 10 + 8),
+    color: colors[Math.floor(Math.random() * colors.length)],
+    w: Math.random() * 10 + 5,
+    h: Math.random() * 6 + 3,
+    rot: Math.random() * 360,
+    rotV: (Math.random() - 0.5) * 12,
+    gravity: 0.18,
+  }));
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const alpha = Math.max(0, 1 - frame / 160);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += p.gravity; p.rot += p.rotV;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot * Math.PI / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+    frame++;
+    if (frame < 200) requestAnimationFrame(draw);
+    else { canvas.style.display = 'none'; ctx.clearRect(0, 0, canvas.width, canvas.height); }
+  }
+  draw();
+}
+
+// ── NEW SESSION ──
+function newSession() {
+  if (!confirm('Start a new negotiation? This session stays in your history.')) return;
+  _stopCurrent();
+  conversationHistory = [];
+  currentVoice = null;
+  currentSessionId = null;
+  audioMap.clear();
+  isBusy = false;
+  slideIdx = 0; slideTotal = 0;
+  $('messages').innerHTML = '';
+  $('userInput').value = '';
+  selectedDiff = null;
+  selectedVoice = null;
+  document.querySelectorAll('.diff-card').forEach(el => { el.classList.remove('selected'); el.style.borderColor = ''; });
+  document.querySelectorAll('.voice-card').forEach(el => { el.classList.remove('selected'); el.style.borderColor = ''; });
+  checkReady();
+  $('chat').style.display = 'none';
+  $('setup').style.display = 'flex';
+}
+
+// ── ACCEPT OFFER ──
+function acceptOffer() {
+  showConfetti();
+  updateSession(currentSessionId, { status: 'accepted' });
+  runAssessment(true);
+}
+
+// ── ASSESSMENT ──
+$('assessBtn').addEventListener('click', () => runAssessment(false));
+
+async function runAssessment(accepted) {
+  $('assessModalTitle').textContent = accepted ? '🎉 Offer Accepted!' : 'Negotiation Assessment';
+  $('assessModal').classList.add('open');
+  $('assessContent').innerHTML = `<div class="modal-loading">${accepted ? 'Finalizing your package...' : 'Analyzing your negotiation...'}</div>`;
+
+  const res = await fetch('/api/assess', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ messages: conversationHistory, job_description: $('jobDesc').value.trim(), difficulty: selectedDiff }),
+  });
+  const data = await res.json();
+
+  updateSession(currentSessionId, {
+    status: accepted ? 'accepted' : 'assessed',
+    score: data.score,
+    headline: data.headline,
+    finalOffer: data.final_offer,
+    verdict: data.verdict,
+    strengths: data.strengths,
+    improvements: data.improvements,
+  });
+
+  const sc = data.score >= 80 ? '#22c55e' : data.score >= 60 ? '#f59e0b' : '#ef4444';
+  const barId = 'debrief-bar-' + Date.now();
+  $('assessContent').innerHTML = `
+    <div class="debrief-lede">
+      <div class="debrief-headline">${escHtml(data.headline)}</div>
+      <div class="debrief-score-row">
+        <div class="debrief-bar-track"><div class="debrief-bar" id="${barId}"></div></div>
+        <span class="debrief-score-val" style="color:${sc}">${data.score}<span class="debrief-score-denom">/100</span></span>
+      </div>
+    </div>
+    <div class="final-offer">Final offer on the table: <strong>${escHtml(data.final_offer)}</strong></div>
+    <div class="assess-section"><h4>What Worked</h4><div class="assess-list">
+      ${(data.strengths||[]).map(s=>`<div class="assess-item"><span class="assess-icon">✓</span><span>${escHtml(s)}</span></div>`).join('')}
+    </div></div>
+    <div class="assess-section"><h4>Practice These Next</h4><div class="assess-list">
+      ${(data.improvements||[]).map(s=>`<div class="assess-item"><span class="assess-icon">→</span><span>${escHtml(s)}</span></div>`).join('')}
+    </div></div>
+    <div class="assess-section"><h4>From Your Coach</h4><div class="verdict-box">${escHtml(data.verdict)}</div></div>`;
+  requestAnimationFrame(() => {
+    const bar = document.getElementById(barId);
+    if (bar) { bar.style.width = data.score + '%'; bar.style.background = sc; }
+  });
+}
+
+$('assessModal').addEventListener('click', e => { if (e.target===$('assessModal')) $('assessModal').classList.remove('open'); });
+
+// ── SIDEBAR ──
+function openSidebar() {
+  renderSidebar();
+  $('sidebar').classList.add('open');
+  $('sbBackdrop').classList.add('open');
+}
+function closeSidebar() {
+  $('sidebar').classList.remove('open');
+  $('sbBackdrop').classList.remove('open');
+}
+
+function renderSidebar() {
+  const sessions = getSessions();
+  if (!sessions.length) {
+    $('sbList').innerHTML = `<div class="sb-empty">No past negotiations yet.<br>Complete a session to see your history here.</div>`;
+    return;
+  }
+  $('sbList').innerHTML = sessions.map(s => {
+    const sc = s.score != null ? (s.score >= 80 ? '#22c55e' : s.score >= 60 ? '#f59e0b' : '#ef4444') : null;
+    const expanded = s.id === expandedSessionId;
+    return `
+    <div class="sb-item ${expanded ? 'expanded' : ''}" onclick="toggleSession('${s.id}')">
+      <div class="sb-item-head">
+        <div class="sb-av" style="background:${s.voice.color}22;color:${s.voice.color}">
+          <img src="${s.voice.image}" alt="${s.voice.name}" onerror="this.remove()">
+          <span>${s.voice.name[0]}</span>
+        </div>
+        <div class="sb-meta">
+          <div class="sb-name">${escHtml(s.voice.name)}</div>
+          <div class="sb-job">${escHtml(s.jobSnippet)}</div>
+        </div>
+        ${sc ? `<div class="sb-score" style="color:${sc}">${s.score}</div>` : ''}
+      </div>
+      <div class="sb-row2">
+        <span class="sb-diff" style="background:${s.diff.color}22;color:${s.diff.color}">${s.diff.emoji} ${s.diff.label}</span>
+        <span class="sb-date">${relativeTime(s.date)}</span>
+      </div>
+      <div class="sb-detail">
+        ${s.headline ? `<div class="sb-headline">${escHtml(s.headline)}</div>` : ''}
+        ${s.verdict ? `<div class="sb-verdict">${escHtml(s.verdict)}</div>` : ''}
+        ${s.finalOffer ? `<div class="sb-final">Final offer: <span>${escHtml(s.finalOffer)}</span></div>` : ''}
+        ${!s.score ? `<div class="sb-headline" style="margin-top:6px">Session not yet assessed.</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleSession(id) {
+  expandedSessionId = expandedSessionId === id ? null : id;
+  renderSidebar();
+}
+
+// ── SESSION STORAGE ──
+function getSessions() {
+  try { return JSON.parse(localStorage.getItem('nego-sessions') || '[]'); } catch { return []; }
+}
+function initSession(id, data) {
+  const sessions = getSessions();
+  if (sessions.find(s => s.id === id)) return;
+  sessions.unshift({ id, date: new Date().toISOString(), status: 'in-progress', score: null, ...data });
+  if (sessions.length > 30) sessions.pop();
+  localStorage.setItem('nego-sessions', JSON.stringify(sessions));
+}
+function updateSession(id, data) {
+  if (!id) return;
+  const sessions = getSessions();
+  const idx = sessions.findIndex(s => s.id === id);
+  if (idx >= 0) {
+    sessions[idx] = { ...sessions[idx], ...data };
+    localStorage.setItem('nego-sessions', JSON.stringify(sessions));
+  }
+}
+
+function relativeTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  const h = Math.floor(diff / 3600000);
+  const d = Math.floor(diff / 86400000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  if (h < 24) return `${h}h ago`;
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function escHtml(str) {
+  return String(str??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function renderMd(str) {
+  return escHtml(str)
+    .replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>')
+    .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+
+init();
+</script>
+</body>
+</html>
