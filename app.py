@@ -416,7 +416,7 @@ async def start(req: StartRequest):
 
     try:
         response = await _anthropic_client.messages.create(
-            model="claude-opus-4-7",
+            model="claude-opus-4-6",
             max_tokens=400,
             thinking={"type": "adaptive"},
             cache_control={"type": "ephemeral", "ttl": "1h"},
@@ -454,7 +454,7 @@ async def chat(req: ChatRequest):
 
     try:
         response = await _anthropic_client.messages.create(
-            model="claude-opus-4-7",
+            model="claude-opus-4-6",
             max_tokens=400,
             thinking={"type": "adaptive"},
             cache_control={"type": "ephemeral", "ttl": "1h"},
@@ -482,7 +482,9 @@ async def transcribe_audio(req: TranscribeRequest):
         logger.warning("transcribe error: %s", e)
         raise HTTPException(500, f"Transcription error: {e}")
     if text is None:
-        raise HTTPException(500, "No speech detected — try speaking louder or closer to the mic")
+        raise HTTPException(
+            500, "No speech detected — try speaking louder or closer to the mic"
+        )
     return {"text": text}
 
 
@@ -518,7 +520,7 @@ Provide:
 
     try:
         response = await _anthropic_client.messages.parse(
-            model="claude-opus-4-7",
+            model="claude-opus-4-6",
             max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
             output_format=AssessResponse,
